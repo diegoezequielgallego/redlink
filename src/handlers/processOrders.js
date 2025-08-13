@@ -18,38 +18,37 @@ exports.handler = async (event) => {
       const isAmountValid = typeof order.amount === "number" && !isNaN(order.amount);
       const isFromAccountValid = typeof order.fromAccount === "string" && /^[0-9]+$/.test(order.fromAccount);
       const isToAccountValid = typeof order.toAccount === "string" && /^[0-9]+$/.test(order.toAccount);
-      const isValid = order.id && isAmountValid && isFromAccountValid && isToAccountValid;
+      const isValid = order.orderId && isAmountValid && isFromAccountValid && isToAccountValid;
 
       order.valid = !!isValid;
 
       // Verificamos si la orden con order.id ya existe en DynamoDB
       const existingOrder = await dynamoDB.send(new GetCommand({
         TableName: process.env.ORDERS_TABLE,
-        Key: { id: order.id }
+        Key: { orderId: order.orderId }
       }));
+  
 
       if (existingOrder.Item) {
         // Orden duplicada
         order.isDuplicate = true;
-        console.warn(`Orden con id ${order.id} ya existe. Marcando como duplicada y guardando solo en DynamoDB.`);
+        order.id = uuidv4();
+        console.warn(`Orden con id ${order.orderId} ya existe. Marcando como duplicada y guardando solo en DynamoDB.`);
 
         await dynamoDB.send(new PutCommand({
           TableName: process.env.ORDERS_TABLE,
-          Item: {
-            ...order,
-            dbId: uuidv4()
-          }
+          Item: order
         }));
 
         console.log(`Orden duplicada guardada en DynamoDB`);
       } else {
         // Orden nueva
         order.isDuplicate = false;
-        order.dbId = uuidv4();
+        order.id = uuidv4();
 
         if (isValid) {
           // Guardar en S3
-          const s3Key = `orders/${order.id}.json`;
+          const s3Key = `orders/${order.orderId}.json`;
           await s3.send(new PutObjectCommand({
             Bucket: process.env.ORDERS_BUCKET,
             Key: s3Key,
@@ -68,7 +67,7 @@ exports.handler = async (event) => {
           Item: order
         }));
 
-        console.log(`Orden ${order.id} guardada en DynamoDB con valid = ${order.valid} y dbId = ${order.dbId}`);
+        console.log(`Orden ${order.orderId} guardada en DynamoDB con valid = ${order.valid} y dbId = ${order.id}`);
       }
 
     } catch (error) {

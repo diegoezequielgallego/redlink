@@ -1,6 +1,7 @@
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { GetCommand } = require("@aws-sdk/lib-dynamodb");
+
+const { ScanCommand } = require("@aws-sdk/lib-dynamodb");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const s3 = new S3Client();
@@ -17,12 +18,16 @@ exports.handler = async (event) => {
   }
 
   try {
-    const result = await dynamoDB.send(new GetCommand({
+    const result = await dynamoDB.send(new ScanCommand({
       TableName: process.env.ORDERS_TABLE,
-      Key: { id: orderId }
+      FilterExpression: "orderId = :id AND isDuplicate = :dup",
+      ExpressionAttributeValues: {
+        ":id": orderId,
+        ":dup": false
+      }
     }));
-
-    const order = result.Item;
+    
+    const order = result.Items?.[0];
 
     if (!order) {
       return {
