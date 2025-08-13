@@ -193,4 +193,8 @@ resource "aws_apigatewayv2_integration" "get_order_integration" {
   integration_method = "POST"
 }
 
-
+resource "aws_apigatewayv2_stage" "dev-stage" {
+  api_id      = aws_apigatewayv2_api.http_api.id
+  name        = "dev"       
+  auto_deploy = true             # para que despliegue automáticamente con cada cambio
+}
