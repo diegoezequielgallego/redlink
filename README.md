@@ -75,18 +75,55 @@
 
 ### 2. Cola de Mensajes
 - **SQS (OrdersQueue)**: Recibe la orden como mensaje
-- **Garantía de entrega**: Confiable a Lambda con reintentos automáticos
+- **Lambda al dar error genera reintentos automaticos (10)**: delegarle los reitentos a Lambda con reintentos automáticos
 
 ### 3. Procesamiento Lambda
+
+El **`processOrders.js`** es el motor central del sistema que procesa cada orden recibida desde SQS. Realiza las siguientes operaciones:
+
+#### 🔍 **Validaciones de Entrada**
+```javascript
+// Valida que todos los campos requeridos estén presentes y sean correctos
+const isAmountValid = typeof order.amount === "number" && !isNaN(order.amount);
+const isFromAccountValid = typeof order.fromAccount === "string" && /^[0-9]+$/.test(order.fromAccount);
+const isToAccountValid = typeof order.toAccount === "string" && /^[0-9]+$/.test(order.toAccount);
+const isValid = order.id && isAmountValid && isFromAccountValid && isToAccountValid;
+```
+
+#### 🔄 **Detección de Duplicados**
+- **Consulta DynamoDB**: Busca si ya existe una orden con el mismo `orderId`
+- **Si es duplicada**: 
+  - Marca `isDuplicate = true`
+  - Genera un nuevo `id` único con UUID
+  - Solo guarda en DynamoDB (no en S3)
+- **Si es nueva**: 
+  - Marca `isDuplicate = false`
+  - Genera un nuevo `id` único con UUID
+
+#### 💾 **Almacenamiento Inteligente**
 ```mermaid
 graph TD
     A[Orden Recibida] --> B{Validar Campos}
-    B -->|Válida| C[Guardar en S3]
-    B -->|Inválida| D[Marcar como inválida]
-    C --> E[Guardar en DynamoDB]
-    D --> E
-    E --> F[Registrar en CloudWatch]
+    B -->|Válida| C{¿Es Duplicada?}
+    B -->|Inválida| D[Marcar valid=false]
+    C -->|No| E[Guardar en S3 + DynamoDB]
+    C -->|Sí| F[Guardar solo en DynamoDB]
+    D --> G[Guardar en DynamoDB]
+    E --> H[Registrar en CloudWatch]
+    F --> H
+    G --> H
 ```
+
+#### 📁 **Estrategia de Almacenamiento**
+- **S3**: Solo órdenes válidas y no duplicadas → `orders/{orderId}.json`
+- **DynamoDB**: Todas las órdenes (válidas, inválidas, duplicadas) con metadatos
+- **CloudWatch**: Logs detallados de cada operación para auditoría
+
+#### 🛡️ **Manejo de Errores**
+- **Try-catch**: Captura errores individuales por cada orden
+- **Logging detallado**: Registra cada paso del proceso
+- **Reintentos**: SQS maneja reintentos automáticos si Lambda falla
+- **DLQ**: Mensajes fallidos van a Dead Letter Queue después de 10 intentos
 
 ### 4. Almacenamiento
 - **S3**: Solo órdenes válidas como JSON
