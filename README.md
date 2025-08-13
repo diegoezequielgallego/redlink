@@ -82,13 +82,7 @@
 El **`processOrders.js`** es el motor central del sistema que procesa cada orden recibida desde SQS. Realiza las siguientes operaciones:
 
 #### 🔍 **Validaciones de Entrada**
-```javascript
-// Valida que todos los campos requeridos estén presentes y sean correctos
-const isAmountValid = typeof order.amount === "number" && !isNaN(order.amount);
-const isFromAccountValid = typeof order.fromAccount === "string" && /^[0-9]+$/.test(order.fromAccount);
-const isToAccountValid = typeof order.toAccount === "string" && /^[0-9]+$/.test(order.toAccount);
-const isValid = order.id && isAmountValid && isFromAccountValid && isToAccountValid;
-```
+- **Valida que todos los campos requeridos estén presentes y sean correctos
 
 #### 🔄 **Detección de Duplicados**
 - **Consulta DynamoDB**: Busca si ya existe una orden con el mismo `orderId`
@@ -99,20 +93,8 @@ const isValid = order.id && isAmountValid && isFromAccountValid && isToAccountVa
 - **Si es nueva**: 
   - Marca `isDuplicate = false`
   - Genera un nuevo `id` único con UUID
+  - Guarda en DynamoDB y en el S3
 
-#### 💾 **Almacenamiento Inteligente**
-```mermaid
-graph TD
-    A[Orden Recibida] --> B{Validar Campos}
-    B -->|Válida| C{¿Es Duplicada?}
-    B -->|Inválida| D[Marcar valid=false]
-    C -->|No| E[Guardar en S3 + DynamoDB]
-    C -->|Sí| F[Guardar solo en DynamoDB]
-    D --> G[Guardar en DynamoDB]
-    E --> H[Registrar en CloudWatch]
-    F --> H
-    G --> H
-```
 
 #### 📁 **Estrategia de Almacenamiento**
 - **S3**: Solo órdenes válidas y no duplicadas → `orders/{orderId}.json`
@@ -125,14 +107,6 @@ graph TD
 - **Reintentos**: SQS maneja reintentos automáticos si Lambda falla
 - **DLQ**: Mensajes fallidos van a Dead Letter Queue después de 10 intentos
 
-### 4. Almacenamiento
-- **S3**: Solo órdenes válidas como JSON
-- **DynamoDB**: Todos los registros con metadatos
-- **CloudWatch**: Logs de eventos y errores
-
-### 5. Manejo de Errores
-- **DLQ (Dead Letter Queue)**: Captura mensajes fallidos después de múltiples intentos
-- **Reintentos automáticos**: SQS maneja reintentos temporalmente fallidos
 
 ---
 
@@ -147,6 +121,71 @@ graph TD
 | **DLQ** | Captura errores persistentes | No pérdida de mensajes, análisis posterior |
 | **S3** | Almacenamiento de órdenes válidas | Trazabilidad, descargas posteriores |
 | **DynamoDB** | Base de datos NoSQL | Auditoría completa, consultas rápidas |
+
+
+### 🚀 **Lambda vs EC2: ¿Por qué elegimos Serverless?**
+
+#### 1. **🏗️ Serverless vs Servidor Dedicado**
+
+**AWS Lambda ✅**
+- **Infraestructura**: AWS se encarga de aprovisionar, escalar y mantener el entorno
+- **Gestión**: No necesitas preocuparte por servidores
+- **Configuración**: Solo subes tu código
+
+**EC2 (Servidor Dedicado) ❌**
+- **Infraestructura**: Debes aprovisionar, configurar, actualizar y escalar manualmente
+- **Gestión**: Responsabilidad total de la infraestructura
+- **Configuración**: Configurar SO, middleware, dependencias
+
+#### 2. **📈 Escalabilidad Automática**
+
+**AWS Lambda ✅**
+- **Escalado**: Escala automáticamente según eventos SQS
+- **Concurrencia**: 100 órdenes = 100 funciones concurrentes automáticamente
+- **Velocidad**: Escalado instantáneo
+
+**EC2 ❌**
+- **Escalado**: Requiere Auto Scaling Groups y configuración manual
+- **Concurrencia**: Debes monitorear carga y crear instancias adicionales
+- **Velocidad**: Tiempo de aprovisionamiento de nuevas instancias
+
+#### 3. **💰 Costo**
+
+**AWS Lambda ✅**
+- **Pago**: Solo por tiempo de ejecución (milisegundos)
+- **Eficiencia**: Ideal para workloads esporádicos/asíncronos
+- **Optimización**: Costo proporcional al uso real
+
+**EC2 ❌**
+- **Pago**: Por hora de instancia, aunque esté inactiva
+- **Eficiencia**: Desperdicio de recursos en carga variable
+- **Optimización**: Over-provisioning común para manejar picos
+
+#### 4. **🔧 Mantenimiento**
+
+**AWS Lambda ✅**
+- **Sistema Operativo**: AWS maneja SO, parches y actualizaciones
+- **Seguridad**: AWS gestiona parches de seguridad
+- **Monitoreo**: CloudWatch integrado automáticamente
+
+**EC2 ❌**
+- **Sistema Operativo**: Debes mantener SO y actualizaciones
+- **Seguridad**: Responsabilidad total de seguridad
+- **Monitoreo**: Configurar y mantener herramientas de monitoreo
+
+#### 5. **⚡ Procesamiento Asíncrono**
+
+**AWS Lambda ✅**
+- **SQS**: Integración nativa perfecta
+- **Event-Driven**: Ideal para procesar órdenes a medida que llegan
+- **Eficiencia**: Sin servidores idle esperando mensajes
+
+**EC2 ❌**
+- **SQS**: Requiere configuración adicional
+- **Event-Driven**: Necesitas servidores siempre encendidos
+- **Eficiencia**: Recursos desperdiciados en espera
+
+> **💡 Conclusión**: Lambda es la elección perfecta para este sistema de procesamiento de órdenes porque ofrece escalabilidad automática, costos optimizados y mantenimiento cero, mientras que EC2 requeriría gestión manual compleja y costos fijos innecesarios.
 
 ---
 
@@ -262,16 +301,4 @@ curl https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/health
 
 ---
 
-## 🤝 Contribución
 
-Este proyecto está diseñado como un sistema de referencia para procesamiento de órdenes serverless en AWS. Para contribuir o reportar issues, por favor contacta al equipo de desarrollo.
-
----
-
-<div align="center">
-
-**Desarrollado con ❤️ usando AWS Serverless**
-
-[![AWS](https://img.shields.io/badge/AWS-Serverless-orange?style=for-the-badge&logo=amazon-aws)](https://aws.amazon.com/)
-
-</div>
