@@ -1,65 +1,142 @@
-# Sistema de Procesamiento de Órdenes con AWS
+# 🚀 Sistema de Procesamiento de Órdenes con AWS
 
-Este proyecto implementa un sistema **serverless** para procesar órdenes de manera asíncrona utilizando **AWS Lambda**, **SQS**, **S3** y **DynamoDB**. Incluye endpoints de prueba para enviar órdenes y verificar su estado.
+[![AWS](https://img.shields.io/badge/AWS-Serverless-orange?style=for-the-badge&logo=amazon-aws)](https://aws.amazon.com/)
+[![Lambda](https://img.shields.io/badge/AWS-Lambda-yellow?style=for-the-badge&logo=aws-lambda)](https://aws.amazon.com/lambda/)
+[![SQS](https://img.shields.io/badge/AWS-SQS-red?style=for-the-badge&logo=amazon-sqs)](https://aws.amazon.com/sqs/)
+[![DynamoDB](https://img.shields.io/badge/AWS-DynamoDB-blue?style=for-the-badge&logo=amazon-dynamodb)](https://aws.amazon.com/dynamodb/)
 
----
+> **Sistema serverless escalable** para procesar órdenes de manera asíncrona utilizando servicios AWS modernos.
 
-## Diagrama de Secuencia y Flujo
+## 📋 Tabla de Contenidos
 
-El flujo de procesamiento de órdenes es el siguiente:
-
-1. **Canal de entrada**: La orden puede provenir de la web, mobile o ATM.
-2. **SQS (OrdersQueue)**: Recibe la orden como mensaje y garantiza entrega confiable a Lambda.
-3. **Lambda OrdersProcessor**:
-   - Valida la orden (`amount`, `fromAccount`, `toAccount`).
-   - Si es válida, guarda el JSON de la orden en **S3**.
-   - Guarda la orden en **DynamoDB**, indicando `valid=true` o `valid=false`.
-   - Registra eventos y errores en **CloudWatch Logs**.
-4. **DLQ (Orders DLQ SQS)**: Si un mensaje falla después de múltiples intentos, se envía aquí para análisis posterior.
-5. **Reintentos**: SQS se encarga de reintentar mensajes temporalmente fallidos.
+- [🏗️ Arquitectura](#️-arquitectura)
+- [🔄 Flujo de Procesamiento](#-flujo-de-procesamiento)
+- [🎯 Decisiones de Diseño](#-decisiones-de-diseño)
+- [🔧 Endpoints de Prueba](#-endpoints-de-prueba)
+- [⚡ Características](#-características)
+- [🚀 Cómo Probar](#-cómo-probar)
 
 ---
 
-## Arquitectura General
+## 🏗️ Arquitectura
 
-El sistema cuenta con los siguientes componentes:
+### Componentes del Sistema
 
-- **Canales (Web/Mobile/ATM)**: Interfaces donde se generan las órdenes.
-- **API Gateway / Health-check**: Endpoints REST para enviar órdenes y verificar el estado del sistema.
-- **OrdersQueue (SQS)**: Cola que desacopla la recepción y procesamiento de órdenes.
-- **OrdersProcessor Lambda**: Función serverless que valida y persiste las órdenes.
-- **OrdersBucket (S3)**: Almacena los JSON de órdenes válidas.
-- **DynamoDB (NoSQL DB)**: Guarda metadatos de cada orden (`valid`, `isDuplicate`, `orderId`).
-- **CloudWatch Logs**: Monitoreo y registro de errores y eventos.
-- **Orders DLQ (SQS)**: Captura mensajes que no se pudieron procesar después de varios intentos.
-- **HealthCheck Lambda**: Endpoint que valida el estado de la aplicación.
+| Componente | Descripción | Tecnología |
+|------------|-------------|------------|
+| **Canales de Entrada** | Interfaces para generar órdenes | Web, Mobile, ATM |
+| **API Gateway** | Endpoints REST para órdenes y health-check | AWS API Gateway |
+| **OrdersQueue** | Cola de mensajes para desacoplar procesamiento | AWS SQS |
+| **OrdersProcessor** | Función serverless para validar y persistir | AWS Lambda |
+| **OrdersBucket** | Almacenamiento de órdenes válidas | AWS S3 |
+| **DynamoDB** | Base de datos NoSQL para metadatos | AWS DynamoDB |
+| **CloudWatch** | Monitoreo y logs del sistema | AWS CloudWatch |
+| **DLQ** | Cola para mensajes fallidos | AWS SQS |
+
+### Diagrama de Arquitectura
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Web/Mobile│    │     ATM     │    │   Canales   │
+│     Apps    │    │             │    │  Externos   │
+└──────┬──────┘    └──────┬──────┘    └──────┬──────┘
+       │                  │                  │
+       └──────────────────┼──────────────────┘
+                          │
+                   ┌──────▼──────┐
+                   │ API Gateway │
+                   └──────┬──────┘
+                          │
+                   ┌──────▼──────┐
+                   │ OrdersQueue │
+                   │   (SQS)     │
+                   └──────┬──────┘
+                          │
+                   ┌──────▼──────┐
+                   │OrdersProcessor│
+                   │   (Lambda)   │
+                   └──────┬──────┘
+                          │
+              ┌───────────┼───────────┐
+              │           │           │
+         ┌────▼────┐ ┌────▼────┐ ┌────▼────┐
+         │   S3    │ │DynamoDB │ │CloudWatch│
+         │(JSON)   │ │(Metadata)│ │ (Logs)  │
+         └─────────┘ └─────────┘ └─────────┘
+```
 
 ---
 
-## Decisiones de Diseño
+## 🔄 Flujo de Procesamiento
 
-- **Lambda vs EC2**: Se eligió Lambda por ser serverless, escalable automáticamente y costo eficiente para procesamiento asíncrono de mensajes.
-- **SQS**: Garantiza entrega confiable, desacopla la producción y consumo de mensajes, y permite reintentos automáticos.
-- **DLQ**: Permite capturar errores persistentes sin perder mensajes y facilita su análisis.
-- **S3**: Almacena las órdenes válidas como JSON para trazabilidad y posibles descargas posteriores.
-- **DynamoDB**: Guarda todos los registros de órdenes para auditoría y consultas rápidas.
+### 1. Recepción de Orden
+- **Canal de entrada**: La orden puede provenir de Web, Mobile o ATM
+- **API Gateway**: Recibe la petición HTTP y la valida
+
+### 2. Cola de Mensajes
+- **SQS (OrdersQueue)**: Recibe la orden como mensaje
+- **Garantía de entrega**: Confiable a Lambda con reintentos automáticos
+
+### 3. Procesamiento Lambda
+```mermaid
+graph TD
+    A[Orden Recibida] --> B{Validar Campos}
+    B -->|Válida| C[Guardar en S3]
+    B -->|Inválida| D[Marcar como inválida]
+    C --> E[Guardar en DynamoDB]
+    D --> E
+    E --> F[Registrar en CloudWatch]
+```
+
+### 4. Almacenamiento
+- **S3**: Solo órdenes válidas como JSON
+- **DynamoDB**: Todos los registros con metadatos
+- **CloudWatch**: Logs de eventos y errores
+
+### 5. Manejo de Errores
+- **DLQ (Dead Letter Queue)**: Captura mensajes fallidos después de múltiples intentos
+- **Reintentos automáticos**: SQS maneja reintentos temporalmente fallidos
 
 ---
 
-## Endpoints de Prueba
+## 🎯 Decisiones de Diseño
 
-### 1. Enviar Orden (Submit Order)
+### ✅ Ventajas de la Arquitectura Elegida
 
+| Decisión | Razón | Beneficio |
+|----------|-------|-----------|
+| **Lambda vs EC2** | Serverless y escalable | Costo eficiente, sin gestión de servidores |
+| **SQS** | Entrega confiable | Desacoplamiento, reintentos automáticos |
+| **DLQ** | Captura errores persistentes | No pérdida de mensajes, análisis posterior |
+| **S3** | Almacenamiento de órdenes válidas | Trazabilidad, descargas posteriores |
+| **DynamoDB** | Base de datos NoSQL | Auditoría completa, consultas rápidas |
 
 ---
 
-## Endpoints de prueba
+## 🔧 Endpoints de Prueba
 
-1. **Submit Order**
+### Base URL
+```
+https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev
+```
 
-POST https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/orders
+### 1. 📤 Enviar Orden
 
-**Body ejemplo:**
+**Endpoint:** `POST /orders`
+
+**Ejemplo de Request:**
+```bash
+curl -X POST https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "order-001",
+    "amount": 2580,
+    "fromAccount": "1111111",
+    "toAccount": "7777777"
+  }'
+```
+
+**Body JSON:**
 ```json
 {
   "id": "order-001",
@@ -67,45 +144,97 @@ POST https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/orders
   "fromAccount": "1111111",
   "toAccount": "7777777"
 }
+```
 
+### 2. 📥 Obtener Orden
 
-Get Order
+**Endpoint:** `GET /orders/{orderId}`
 
-GET https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/orders/order-001
+**Ejemplo:**
+```bash
+curl https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/orders/order-001
+```
 
+### 3. 🏥 Health Check
 
-Health-check
+**Endpoint:** `GET /health`
 
-GET https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/health
+**Ejemplo:**
+```bash
+curl https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/health
+```
 
+---
 
-Consideraciones de funcionamiento
+## ⚡ Características
 
-    Cada orden tiene un orderId único.
+### 🔐 Validaciones
+- ✅ **Campos requeridos**: `id`, `amount`, `fromAccount`, `toAccount`
+- ✅ **Detección de duplicados**: Genera `isDuplicate=true` para órdenes repetidas
+- ✅ **Validación de monto**: Verifica que `amount` sea un número válido
 
-    Si se recibe una orden duplicada, se genera un nuevo registro con isDuplicate=true.
+### 📊 Almacenamiento
+- **S3**: Solo órdenes válidas como archivos JSON
+- **DynamoDB**: Todos los registros con campos `valid` e `isDuplicate`
+- **CloudWatch**: Logs completos para monitoreo y debugging
 
-    Solo las órdenes válidas se guardan en S3.
+### 🔄 Resiliencia
+- **Reintentos automáticos**: SQS maneja fallos temporales
+- **DLQ**: Captura errores persistentes sin pérdida de datos
+- **Escalabilidad**: Sistema serverless que se adapta automáticamente
 
-    DynamoDB almacena todas las órdenes, con los campos valid y isDuplicate para auditoría.
+---
 
-    CloudWatch permite monitorear eventos y errores.
+## 🚀 Cómo Probar
 
-    DLQ captura mensajes que no pudieron ser procesados después de varios intentos.
+### Flujo Completo de Prueba
 
-Cómo probar el flujo completo
+1. **📤 Enviar una orden**
+   ```bash
+   curl -X POST https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/orders \
+     -H "Content-Type: application/json" \
+     -d '{"id": "test-001", "amount": 1000, "fromAccount": "123456", "toAccount": "789012"}'
+   ```
 
-    Enviar una orden usando el endpoint POST /orders.
+2. **📥 Verificar la orden**
+   ```bash
+   curl https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/orders/test-001
+   ```
 
-    Verificar que la orden se haya guardado en DynamoDB (valid=true/false).
+3. **🏥 Verificar estado del sistema**
+   ```bash
+   curl https://xr2nykop37.execute-api.us-east-1.amazonaws.com/dev/health
+   ```
 
-    Revisar el JSON en S3 utilizando la URL proporcionada por GET /orders/:orderId.
+### Verificaciones Adicionales
 
-    Validar logs en CloudWatch y el comportamiento de DLQ si ocurre un error persistente.
+- ✅ **DynamoDB**: Confirmar que la orden se guardó con `valid=true/false`
+- ✅ **S3**: Verificar que el JSON esté disponible (solo órdenes válidas)
+- ✅ **CloudWatch**: Revisar logs para eventos y errores
+- ✅ **DLQ**: Monitorear mensajes fallidos si ocurren errores persistentes
 
+---
 
-Notas adicionales
+## 📝 Notas Importantes
 
-    Se agregaron dos lambdas únicamente para testeo del ambiente: Submit Orders y Get Orders.
+> **💡 Lambdas de Testeo**: Se incluyen dos lambdas adicionales (`Submit Orders` y `Get Orders`) únicamente para facilitar las pruebas del ambiente.
 
-    El sistema es completamente serverless y escalable automáticamente según la cantidad de órdenes entrantes.
+> **⚡ Escalabilidad**: El sistema es completamente serverless y se escala automáticamente según la demanda de órdenes entrantes.
+
+> **🔍 Auditoría**: Todas las órdenes se registran en DynamoDB para auditoría completa, independientemente de su validez.
+
+---
+
+## 🤝 Contribución
+
+Este proyecto está diseñado como un sistema de referencia para procesamiento de órdenes serverless en AWS. Para contribuir o reportar issues, por favor contacta al equipo de desarrollo.
+
+---
+
+<div align="center">
+
+**Desarrollado con ❤️ usando AWS Serverless**
+
+[![AWS](https://img.shields.io/badge/AWS-Serverless-orange?style=for-the-badge&logo=amazon-aws)](https://aws.amazon.com/)
+
+</div>
