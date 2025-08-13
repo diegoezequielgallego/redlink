@@ -198,3 +198,11 @@ resource "aws_apigatewayv2_stage" "dev-stage" {
   name        = "dev"       
   auto_deploy = true             # para que despliegue automáticamente con cada cambio
 }
+
+# para conectad la cola SQS a process_orders
+resource "aws_lambda_event_source_mapping" "process_orders_sqs" {
+  event_source_arn = aws_sqs_queue.orders_queue.arn
+  function_name    = aws_lambda_function.process_orders.arn
+  batch_size       = 1
+  enabled          = true
+}

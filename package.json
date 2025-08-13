@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "zip:processOrders": "powershell Compress-Archive -Path src\\handlers\\processOrders.js -DestinationPath build\\processOrders.zip -Force",
+    "zip:processOrders": "powershell Compress-Archive -Path src\\handlers\\processOrders.js,node_modules -DestinationPath build\\processOrders.zip -Force",
     "zip:health": "powershell Compress-Archive -Path src\\handlers\\health.js -DestinationPath build\\health.zip -Force",
     "zip:submitOrder": "powershell Compress-Archive -Path src\\handlers\\submitOrder.js,package.json,package-lock.json,node_modules -DestinationPath build\\submitOrder.zip -Force",
     "zip:getOrder": "powershell Compress-Archive -Path src\\handlers\\getOrder.js -DestinationPath build\\getOrder.zip -Force",
