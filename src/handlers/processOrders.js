@@ -1,6 +1,7 @@
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { GetCommand, PutCommand } = require("@aws-sdk/lib-dynamodb");
+const { PutCommand } = require("@aws-sdk/lib-dynamodb");
+const { QueryCommand } = require("@aws-sdk/lib-dynamodb");
 const { v4: uuidv4 } = require("uuid");
 
 // Inicializamos los clientes
@@ -18,20 +19,29 @@ exports.handler = async (event) => {
       const isAmountValid = typeof order.amount === "number" && !isNaN(order.amount);
       const isFromAccountValid = typeof order.fromAccount === "string" && /^[0-9]+$/.test(order.fromAccount);
       const isToAccountValid = typeof order.toAccount === "string" && /^[0-9]+$/.test(order.toAccount);
-      const isValid = order.orderId && isAmountValid && isFromAccountValid && isToAccountValid;
+      const isValid = order.id && isAmountValid && isFromAccountValid && isToAccountValid;
 
       order.valid = !!isValid;
 
-      // Verificamos si la orden con order.id ya existe en DynamoDB
-      const existingOrder = await dynamoDB.send(new GetCommand({
+      const result = await dynamoDB.send(new QueryCommand({
         TableName: process.env.ORDERS_TABLE,
-        Key: { orderId: order.orderId }
+        IndexName: "orderId-index",
+        KeyConditionExpression: "orderId = :oid",
+        ExpressionAttributeValues: {
+          ":oid": order.id
+        }
       }));
-  
+      
+      console.log("result:", JSON.stringify(result));
 
-      if (existingOrder.Item) {
+      const existingOrder = result.Items?.[0]; // si esperás solo uno
+  
+      console.log("existingOrder:", JSON.stringify(existingOrder));
+
+      if (existingOrder) {
         // Orden duplicada
         order.isDuplicate = true;
+        order.orderId = order.id;
         order.id = uuidv4();
         console.warn(`Orden con id ${order.orderId} ya existe. Marcando como duplicada y guardando solo en DynamoDB.`);
 
@@ -44,6 +54,7 @@ exports.handler = async (event) => {
       } else {
         // Orden nueva
         order.isDuplicate = false;
+        order.orderId = order.id;
         order.id = uuidv4();
 
         if (isValid) {

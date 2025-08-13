@@ -31,6 +31,17 @@ resource "aws_dynamodb_table" "orders_table" {
     name = "id"
     type = "S"
   }
+
+  attribute {
+    name = "orderId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "orderId-index"
+    hash_key           = "orderId"
+    projection_type    = "ALL"
+  }
 }
 
 # Role para Lambda
