@@ -1,0 +1,22 @@
+{
+  "name": "redlink",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "zip:processOrders": "powershell Compress-Archive -Path src\\handlers\\processOrders.js -DestinationPath build\\processOrders.zip -Force",
+    "zip:health": "powershell Compress-Archive -Path src\\handlers\\health.js -DestinationPath build\\health.zip -Force",
+    "zip:all": "npm run zip:processOrders && npm run zip:health",
+    "clean": "rimraf build/*"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "aws-sdk": "^2.1692.0"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.10"
+  }
+}
