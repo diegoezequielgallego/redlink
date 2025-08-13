@@ -1,13 +1,13 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { v4 as uuidv4 } from "uuid";
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { GetCommand, PutCommand } = require("@aws-sdk/lib-dynamodb");
+const { v4: uuidv4 } = require("uuid");
 
 // Inicializamos los clientes
 const s3 = new S3Client();
 const dynamoDB = new DynamoDBClient();
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
   console.log("Evento recibido:", JSON.stringify(event));
 
   for (const record of event.Records) {

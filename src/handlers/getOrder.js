@@ -1,8 +1,12 @@
-const AWS = require('aws-sdk');
-const s3 = new AWS.S3();
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { GetCommand } from "@aws-sdk/lib-dynamodb";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";  // <- acá al tope
 
-exports.handler = async (event) => {
+const s3 = new S3Client();
+const dynamoDB = new DynamoDBClient();
+
+export const handler = async (event) => {
   const orderId = event.pathParameters?.orderId;
 
   if (!orderId) {
@@ -13,11 +17,10 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Obtener orden de DynamoDB por id (clave hash)
-    const result = await dynamoDB.get({
+    const result = await dynamoDB.send(new GetCommand({
       TableName: process.env.ORDERS_TABLE,
       Key: { id: orderId }
-    }).promise();
+    }));
 
     const order = result.Item;
 
@@ -28,18 +31,19 @@ exports.handler = async (event) => {
       };
     }
 
-    // Construir URL pública del JSON en S3 (o firmada si el bucket es privado)
     const s3Key = `orders/${orderId}.json`;
     let s3Url;
 
     if (process.env.BUCKET_PUBLIC === 'true') {
       s3Url = `https://${process.env.ORDERS_BUCKET}.s3.amazonaws.com/${s3Key}`;
     } else {
-      s3Url = s3.getSignedUrl('getObject', {
+      // Generar URL firmada con AWS SDK v3
+      const command = new GetObjectCommand({
         Bucket: process.env.ORDERS_BUCKET,
         Key: s3Key,
-        Expires: 300, // 5 minutos
       });
+
+      s3Url = await getSignedUrl(s3, command, { expiresIn: 300 });
     }
 
     return {
