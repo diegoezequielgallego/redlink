@@ -117,3 +117,80 @@ resource "aws_lambda_permission" "api_gateway_health" {
   function_name = aws_lambda_function.health.function_name
   principal     = "apigateway.amazonaws.com"
 }
+
+# --- Lambda submitOrder ---
+resource "aws_lambda_function" "submit_order" {
+  function_name = "submitOrder"
+  handler       = "submitOrder.handler"
+  runtime       = "nodejs20.x"
+  role          = aws_iam_role.lambda_role.arn
+  filename      = "../build/submitOrder.zip"
+
+  environment {
+    variables = {
+      ORDERS_QUEUE_URL = aws_sqs_queue.orders_queue.id
+    }
+  }
+}
+
+resource "aws_lambda_permission" "api_gateway_submit_order" {
+  statement_id  = "AllowAPIGatewayInvokeSubmitOrder"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.submit_order.function_name
+  principal     = "apigateway.amazonaws.com"
+}
+
+# --- Lambda getOrder ---
+resource "aws_lambda_function" "get_order" {
+  function_name = "getOrder"
+  handler       = "getOrder.handler"
+  runtime       = "nodejs20.x"
+  role          = aws_iam_role.lambda_role.arn
+  filename      = "../build/getOrder.zip"
+
+  environment {
+    variables = {
+      ORDERS_TABLE  = aws_dynamodb_table.orders_table.name
+      ORDERS_BUCKET = aws_s3_bucket.orders_bucket.bucket
+      BUCKET_PUBLIC = "false"
+    }
+  }
+}
+
+resource "aws_lambda_permission" "api_gateway_get_order" {
+  statement_id  = "AllowAPIGatewayInvokeGetOrder"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_order.function_name
+  principal     = "apigateway.amazonaws.com"
+}
+
+# --- API Gateway Rutas para submitOrder y getOrder ---
+
+# Recurso para /orders
+resource "aws_apigatewayv2_route" "post_orders_route" {
+  api_id    = aws_apigatewayv2_api.http_api.id
+  route_key = "POST /orders"
+  target    = "integrations/${aws_apigatewayv2_integration.submit_order_integration.id}"
+}
+
+resource "aws_apigatewayv2_integration" "submit_order_integration" {
+  api_id           = aws_apigatewayv2_api.http_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.submit_order.invoke_arn
+  integration_method = "POST"
+}
+
+resource "aws_apigatewayv2_route" "get_order_route" {
+  api_id    = aws_apigatewayv2_api.http_api.id
+  route_key = "GET /orders/{orderId}"
+  target    = "integrations/${aws_apigatewayv2_integration.get_order_integration.id}"
+}
+
+resource "aws_apigatewayv2_integration" "get_order_integration" {
+  api_id           = aws_apigatewayv2_api.http_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.get_order.invoke_arn
+  integration_method = "POST"
+}
+
+
