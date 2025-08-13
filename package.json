@@ -6,7 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "zip:processOrders": "powershell Compress-Archive -Path src\\handlers\\processOrders.js -DestinationPath build\\processOrders.zip -Force",
     "zip:health": "powershell Compress-Archive -Path src\\handlers\\health.js -DestinationPath build\\health.zip -Force",
-    "zip:submitOrder": "powershell Compress-Archive -Path src\\handlers\\submitOrder.js -DestinationPath build\\submitOrder.zip -Force",
+    "zip:submitOrder": "powershell Compress-Archive -Path src\\handlers\\submitOrder.js,package.json,package-lock.json,node_modules -DestinationPath build\\submitOrder.zip -Force",
     "zip:getOrder": "powershell Compress-Archive -Path src\\handlers\\getOrder.js -DestinationPath build\\getOrder.zip -Force",
     "zip:all": "npm run zip:processOrders && npm run zip:health && npm run zip:submitOrder && npm run zip:getOrder",
     "clean": "rimraf build/*"
@@ -16,6 +16,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.864.0",
     "aws-sdk": "^2.1692.0",
     "uuid": "^11.1.0"
   },

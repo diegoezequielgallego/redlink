@@ -7,4 +7,5 @@ terraform init
 
 -para marcar cambios en lugares especificos
 terraform taint aws_lambda_function.process_orders
+terraform taint aws_lambda_function.submit_order
 terraform apply
