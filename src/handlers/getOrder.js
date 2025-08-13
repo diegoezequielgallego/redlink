@@ -1,12 +1,12 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { GetCommand } from "@aws-sdk/lib-dynamodb";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";  // <- acá al tope
+const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { GetCommand } = require("@aws-sdk/lib-dynamodb");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const s3 = new S3Client();
 const dynamoDB = new DynamoDBClient();
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
   const orderId = event.pathParameters?.orderId;
 
   if (!orderId) {
@@ -37,7 +37,6 @@ export const handler = async (event) => {
     if (process.env.BUCKET_PUBLIC === 'true') {
       s3Url = `https://${process.env.ORDERS_BUCKET}.s3.amazonaws.com/${s3Key}`;
     } else {
-      // Generar URL firmada con AWS SDK v3
       const command = new GetObjectCommand({
         Bucket: process.env.ORDERS_BUCKET,
         Key: s3Key,
