@@ -6,3 +6,10 @@ secret-key: eTRI1+0eEFwfLT++voStvD4nf6+9Vi1Mmve7cMkg
 Antes de desplegar:
 npm run zip:all
 
+-para iniviar terraform
+terraform init 
+
+
+-para marcar cambios en lugares especificos
+terraform taint aws_lambda_function.process_orders
+terraform apply
